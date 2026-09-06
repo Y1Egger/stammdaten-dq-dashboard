@@ -1,5 +1,7 @@
 ﻿# Stammdaten
 
+![Verschleierte Nullwerte im Profiling](00-zusammenfassung.png)
+
 **Data Quality Dashboard für den Wiener Baumkataster, nach ISO/IEC 25012**
 
 Ein Projekt zur systematischen Prüfung von Datenqualität: von der Rohdatei über regelbasierte Validierung bis zum Dashboard, das Qualitätskennzahlen sichtbar und nachvollziehbar macht.
@@ -15,6 +17,8 @@ Bezogen über [data.gv.at](https://www.data.gv.at)
 Lizenz: **CC BY 4.0** — Datenquelle: Stadt Wien, data.wien.gv.at
 
 Umfang: 232.608 Datensätze, 19 Spalten. Die Rohdatei ist bewusst nicht Teil dieses Repositorys; sie wird über das Ladeskript bezogen.
+
+![Verschleierte Nullwerte im Profiling](01-struktur-datentypen.png)
 
 ---
 
@@ -64,9 +68,13 @@ Beide Spalten sind als Integer typisiert und enthalten formal keine NULL-Werte. 
 
 *Konsequenz für die Regeln:* Vollständigkeit wird hier nicht über einen NULL-Check geprüft, sondern über einen Plausibilitätsbereich.
 
+![Verschleierte Nullwerte im Profiling](docs/02-sentinel-values.png)
+
 ### 2. Verzerrte Kennzahlen als Folge
 
 Ohne Bereinigung ergibt sich ein durchschnittliches Pflanzjahr von **1441**. Der Median der bereinigten Werte liegt bei 1985. Jede Auswertung auf dieser Spalte ist ohne vorgelagerte Qualitätsprüfung unbrauchbar.
+
+![Verschleierte Nullwerte im Profiling](docs/03-wertebereich-pflanzjahr.png)
 
 ### 3. Technischer und fachlicher Schlüssel
 
@@ -78,13 +86,19 @@ Ohne Bereinigung ergibt sich ein durchschnittliches Pflanzjahr von **1441**. Der
 
 **17.009 Werte in `BAUMNUMMER` (7,3 %) sind nicht rein numerisch.** Das erklärt, warum die Spalte als Text eingelesen wird, obwohl die Mehrzahl der Werte wie Zahlen aussieht.
 
+![Verschleierte Nullwerte im Profiling](docs/04-schluesselkandidaten.png)
+
 ### 5. Fehlende Bezirkszuordnung
 
 **595 Datensätze haben keinen Bezirk.** Erkennbar bereits am Datentyp: `BEZIRK` wird als `float64` gelesen, weil pandas Integer-Spalten mit Nullwerten auf Fließkomma umstellt.
 
+![Verschleierte Nullwerte im Profiling](docs/05-fehlende-werte.png)
+
 ### 6. Spalten ohne Informationsgehalt
 
 `DATENFUEHRUNG` enthält für alle Datensätze denselben Wert. `SE_ANNO_CAD_DATA` ist vollständig leer. Beide tragen nichts zur Auswertung bei.
+
+![Verschleierte Nullwerte im Profiling](docs/06-zero-variance.png)
 
 ### 7. Abweichung zwischen Metadaten und Datenbestand
 
