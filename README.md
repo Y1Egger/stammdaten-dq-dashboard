@@ -1,12 +1,14 @@
 # Stammdaten
 
-<p align="center">
-  <img src="docs/img/00-zusammenfassung.png" alt="Zusammenfassung der Profiling-Ergebnisse">
-</p>
-
 **Data Quality Dashboard für den Wiener Baumkataster, nach ISO/IEC 25012**
 
-Ein Projekt zur systematischen Prüfung von Datenqualität: von der Rohdatei über regelbasierte Validierung bis zum Dashboard, das Qualitätskennzahlen sichtbar und nachvollziehbar macht.
+<p align="center">
+  <img src="docs/img/11-dashboard-uebersicht.png" alt="Übersichtsseite des Dashboards mit Pass-Rate je ISO-Dimension">
+</p>
+
+Ein durchgängiges Datenqualitätsprojekt: von der Rohdatei über explorative Analyse und regelbasierte Validierung bis zum Dashboard, das Qualitätskennzahlen sichtbar und nachvollziehbar macht.
+
+Geprüft werden 232.608 Datensätze gegen 15 Regeln, die den inhärenten Datenqualitätsmerkmalen nach ISO/IEC 25012 zugeordnet sind.
 
 ---
 
@@ -37,7 +39,8 @@ CSV (data.gv.at)
   Regelpruefung      src/03_validierung.py  Great Expectations
       │
       ▼
-  Ergebnisdateien    output/*.csv
+  Ergebnisdateien    output/dq_results.csv
+                     output/dq_fehler.csv
       │
       ▼
   Dashboard          stammdaten.pbix        Power BI
@@ -54,11 +57,11 @@ Die beiden Profiling-Schritte sind bewusst getrennt. `01_einlesen.py` prüft mit
 | Strukturprüfung und Datentypen | pandas | abgeschlossen |
 | Inhaltliche Analyse | DuckDB | abgeschlossen |
 | Regelprüfung | Great Expectations | abgeschlossen |
-| Dashboard | Power BI | offen |
+| Dashboard | Power BI | abgeschlossen |
 
 ---
 
-## Teil 1: Strukturprüfung mit pandas
+# Teil 1: Strukturprüfung mit pandas
 
 Quelle: [`src/01_einlesen.py`](src/01_einlesen.py)
 
@@ -72,7 +75,7 @@ Bereits die Datentypen liefern zwei Hinweise: `BEZIRK` wird als `float64` gelese
 
 ---
 
-## Teil 2: Inhaltliche Analyse mit DuckDB
+# Teil 2: Inhaltliche Analyse mit DuckDB
 
 Quelle: [`src/02_profiling.py`](src/02_profiling.py)
 
@@ -246,7 +249,7 @@ Der Fall zeigt, dass Prüfregeln selbst eine Fehlerquelle sind: Ein nicht begrü
 
 ---
 
-## Teil 3: Regelprüfung mit Great Expectations
+# Teil 3: Regelprüfung mit Great Expectations
 
 Quelle: [`src/03_validierung.py`](src/03_validierung.py)
 
@@ -256,7 +259,70 @@ Quelle: [`src/03_validierung.py`](src/03_validierung.py)
   <img src="docs/img/09-regelpruefung.png" alt="Ergebnis der Regelprüfung je Regel und je ISO-Dimension">
 </p>
 
-### Regelkatalog und Ergebnis
+## Aufbereitung vor der Prüfung
+
+Zwei Vorverarbeitungsschritte sind nötig, bevor die Regeln greifen können.
+
+**Ausschluss der Jungbäume.** Bei noch nicht gepflanzten Bäumen sind fehlende Messwerte fachlich korrekt. Ohne diesen Filter würden die Vollständigkeitsregeln 3.140 Falschmeldungen erzeugen.
+
+```python
+df = df.loc[df["GATTUNG_ART"] != "Jungbaum wird gepflanzt"].copy()
+```
+
+**Normalisierung der Textspalten.** Für die Konsistenzprüfungen müssen die TXT-Varianten auf ihre numerische Entsprechung zurückgeführt werden. Der Platzhalter wird dabei auf 0 abgebildet, das Suffix `cm` entfernt.
+
+```python
+df["_pflanzjahr_aus_txt"] = (
+    df["PFLANZJAHR_TXT"]
+    .replace("nicht definiert", "0")
+    .astype(str).str.extract(r"(\d+)")[0]
+    .fillna("0").astype(int)
+)
+```
+
+**Extraktion der Koordinaten.** Die Spalte `SHAPE` enthält den Punkt als Text und muss für die Bereichsprüfung zerlegt werden.
+
+```python
+koord = df["SHAPE"].astype(str).str.extract(r"POINT \(([-\d.]+) ([-\d.]+)\)")
+df["_lon"] = pd.to_numeric(koord[0], errors="coerce")
+df["_lat"] = pd.to_numeric(koord[1], errors="coerce")
+```
+
+## Regeldefinition
+
+Jede Regel trägt ihre ISO-Dimension als Metainformation mit, damit das Dashboard nach Dimension gruppieren kann. Auszug aus dem Regelkatalog:
+
+```python
+REGELN = [
+    ("R01", "Pflanzjahr im plausiblen Bereich", "PFLANZJAHR", "Vollstaendigkeit",
+     gxe.ExpectColumnValuesToBeBetween(
+         column="PFLANZJAHR", min_value=1650, max_value=2026)),
+
+    ("R08", "Baum-ID eindeutig", "BAUM_ID", "Genauigkeit",
+     gxe.ExpectColumnValuesToBeUnique(column="BAUM_ID")),
+
+    ("R10", "Pflanzjahr stimmt mit Textfassung ueberein",
+     "PFLANZJAHR / PFLANZJAHR_TXT", "Konsistenz",
+     gxe.ExpectColumnPairValuesToBeEqual(
+         column_A="PFLANZJAHR", column_B="_pflanzjahr_aus_txt")),
+
+    ("R13", "Format 'Botanischer Name (Trivialname)'",
+     "GATTUNG_ART", "Konsistenz",
+     gxe.ExpectColumnValuesToMatchRegex(
+         column="GATTUNG_ART", regex=r"^.+\(.+\)$")),
+]
+```
+
+Die Ausführung nutzt `result_format="COMPLETE"`. Ohne diese Angabe begrenzt Great Expectations die Liste der fehlerhaften Zeilenindizes auf 20, was für den Drill-through im Dashboard nicht ausreicht.
+
+```python
+resultat = definition.run(
+    batch_parameters={"dataframe": df},
+    result_format={"result_format": "COMPLETE"},
+)
+```
+
+## Regelkatalog und Ergebnis
 
 | # | Regel | Spalte | Dimension | Fehler | Pass-Rate |
 |---|---|---|---|---|---|
@@ -276,9 +342,11 @@ Quelle: [`src/03_validierung.py`](src/03_validierung.py)
 | R13 | Format Botanischer Name (Trivialname) | GATTUNG_ART | Konsistenz | 42 | 99,98 % |
 | R14 | Pflanzjahr exakt erfasst (ab 2006) | PFLANZJAHR | Glaubwürdigkeit | 153.263 | 33,21 % |
 
-### Bestätigung des Profilings
+## Bestätigung des Profilings
 
 R01 meldet 61.288 Verstöße bei 229.468 geprüften Datensätzen. Das entspricht exakt den 64.410 Sentinel Values aus Befund 1 abzüglich der 3.140 ausgeschlossenen Jungbäume. Profiling und Regelprüfung stimmen damit überein, was beide Schritte gegenseitig bestätigt.
+
+## Zwei zusätzliche Befunde aus der Regelprüfung
 
 ### 11. Vertauschte Koordinaten oder zu enge Bounding Box
 
@@ -288,13 +356,13 @@ R09a meldet 54 Verstöße, R09b keinen einzigen. Da nur der Längengrad betroffe
 
 R06 meldet 23 Datensätze mit einem Stammumfang über 1000 cm. Ein Baum mit über zehn Metern Stammumfang ist weltweit eine Ausnahmeerscheinung. Wahrscheinlich liegt entweder ein Tippfehler oder eine Erfassung in Millimeter statt Zentimeter vor.
 
-### Zur Bewertung von R14
+## Zur Bewertung von R14
 
 R14 weist mit 33,21 % die niedrigste Pass-Rate aller Regeln aus, misst aber keine Fehler. Laut Datenbeschreibung der Stadt Wien wurde das Baumalter vor 2006 aus dem Stammumfang geschätzt und ist erst danach exakt erfasst. Die 153.263 Verstöße sind also korrekt erfasste Werte mit geringerer Konfidenz, nicht fehlerhafte Daten.
 
-Die Regel wird deshalb als eigene Kategorie geführt und im Dashboard farblich von echten Verstößen unterschieden. Andernfalls würde eine korrekte Eigenschaft des Datenbestands die Gesamtbewertung verzerren.
+Die Regel wird deshalb als eigene Kategorie geführt und im Dashboard von den echten Prüfregeln getrennt. Andernfalls würde eine korrekte Eigenschaft des Datenbestands die Gesamtbewertung verzerren.
 
-### Ergebnisdateien
+## Ergebnisdateien
 
 | Datei | Inhalt |
 |---|---|
@@ -305,7 +373,97 @@ Die Trennung in zwei Dateien ermöglicht im Dashboard den Drill-through von eine
 
 ---
 
-## Verwendung
+# Teil 4: Dashboard mit Power BI
+
+Datei: `stammdaten.pbix`
+
+## Datenmodell
+
+Beide Ergebnisdateien werden importiert und über `rule_id` verknüpft. `dq_results` ist die Faktentabelle auf Regelebene, `dq_fehler` enthält die Einzelfälle.
+
+<p align="center">
+  <img src="docs/img/10-datenmodell.png" alt="Datenmodell mit Beziehung zwischen dq_results und dq_fehler">
+</p>
+
+Kardinalität 1:n, Kreuzfilterrichtung einfach von `dq_results` nach `dq_fehler`.
+
+## Berechnete Spalte
+
+Trennt Prüfregeln von der Konfidenzregel R14, damit beide im Dashboard unterschiedlich behandelt werden können.
+
+```dax
+Regeltyp = IF(dq_results[iso_dimension] = "Glaubwuerdigkeit", "Konfidenz", "Pruefregel")
+```
+
+## Measures
+
+```dax
+Regelpruefungen = SUM(dq_results[geprueft_zeilen])
+```
+
+```dax
+Verstoesse = SUM(dq_results[fehler_zeilen])
+```
+
+```dax
+Pass Rate = DIVIDE([Regelpruefungen] - [Verstoesse], [Regelpruefungen])
+```
+
+```dax
+Pass Rate ohne Konfidenz = CALCULATE([Pass Rate], dq_results[Regeltyp] = "Pruefregel")
+```
+
+```dax
+Fehlgeschlagene Regeln = CALCULATE(COUNTROWS(dq_results), dq_results[status] = "FAIL")
+```
+
+**Warum eine gewichtete Pass-Rate.** `Pass Rate` teilt die Summe aller bestandenen Prüfungen durch die Summe aller Prüfungen. Der naheliegendere Mittelwert der einzelnen Pass-Raten wäre irreführend: Er hätte die Dimension Genauigkeit bei zwei fehlgeschlagenen Regeln als 100 % ausgewiesen, weil die Einzelraten von 99,98 % und 99,99 % gerundet 1,0 ergeben.
+
+## Farbcodierung
+
+Die Balken sind über bedingte Formatierung nach Regeln eingefärbt, nicht nach Farbverlauf:
+
+| Bereich | Farbe |
+|---|---|
+| ab 95 % | grün |
+| 90 bis 95 % | gelb |
+| unter 90 % | rot |
+
+Das Balkendiagramm ist zusätzlich auf `Regeltyp = Pruefregel` gefiltert. Ohne diesen Filter erschiene R14 mit 33,21 % als roter Balken und damit als schlechteste Kategorie, obwohl die Regel keinen Mangel misst. Die Tabelle daneben zeigt weiterhin alle 15 Regeln.
+
+## Seite 1: Übersicht
+
+<p align="center">
+  <img src="docs/img/11-dashboard-uebersicht.png" alt="Übersichtsseite mit Pass-Rate je Dimension und Regeltabelle">
+</p>
+
+Die beiden Kennzahlen nebeneinander machen den Unterschied sichtbar: **97,53 %** über alle echten Prüfregeln, **93,24 %** inklusive der Konfidenzregel.
+
+## Seite 2: Detailansicht
+
+<p align="center">
+  <img src="docs/img/12-dashboard-detail.png" alt="Detailseite mit den betroffenen Datensätzen einer Regel">
+</p>
+
+Per Rechtsklick auf eine Regel gelangt man über Drill-through zu den betroffenen Datensätzen. Das Beispiel zeigt R12: Baumnummern mit Buchstabenzusatz wie Sortenkennzeichnungen.
+
+Die Detailtabelle ist bewusst als Stichprobe angelegt, maximal 500 Datensätze je Regel. Bei 61.288 Verstößen allein für R01 wäre eine vollständige Ausgabe weder handhabbar noch nützlich. Der Hinweis steht direkt auf der Seite, damit die Tabelle nicht als vollständig missverstanden wird.
+
+---
+
+# Grenzen und nächste Schritte
+
+**Die Prüfung läuft auf einem statischen Abzug.** Ein produktiver Einsatz würde einen automatisierten Lauf gegen die jeweils aktuelle Quelle erfordern, mit Historisierung der Ergebnisse. Die Spalte `run_ts` in beiden Ausgabedateien ist dafür bereits angelegt, wird aktuell aber nur mit einem einzigen Lauf befüllt. Erst mehrere Läufe machen einen Trendverlauf möglich.
+
+**Die Schwellenwerte sind fachlich begründet, aber nicht abgestimmt.** Die Obergrenze von 1000 cm für den Stammumfang und die Bounding Box für Wien beruhen auf Plausibilitätsannahmen. In einem realen Projekt kämen sie aus dem Fachbereich, nicht aus der Analyse. Befund 10 zeigt, welchen Schaden ein nicht hinterfragter Schwellenwert anrichten kann.
+
+**Befund 11 ist nicht abschließend geklärt.** Ob die 54 Längengrad-Ausreißer auf vertauschte Koordinaten oder eine zu eng gewählte Bounding Box zurückgehen, ließe sich durch eine Kartendarstellung der betroffenen Punkte klären.
+
+**Die Regeln decken nur die inhärenten Merkmale nach ISO/IEC 25012 ab.** Systemabhängige Merkmale wie Verfügbarkeit, Portabilität oder Wiederherstellbarkeit lassen sich an einem Dateiabzug nicht sinnvoll prüfen.
+
+---
+
+# Verwendung
 
 ```bash
 python -m venv .venv
@@ -317,10 +475,16 @@ python src/02_profiling.py
 python src/03_validierung.py
 ```
 
-Die Rohdatei wird unter `data/raw/baumkataster.csv` erwartet.
+Die Rohdatei wird unter `data/raw/baumkataster.csv` erwartet. Das Dashboard `stammdaten.pbix` liest die erzeugten Dateien aus `output/`.
 
 ---
 
-## Technologie
+# Technologie
 
-Python (pandas), DuckDB, Great Expectations, Power BI
+| Bereich | Werkzeug |
+|---|---|
+| Strukturprüfung, Aufbereitung | Python, pandas |
+| Mengenbasierte Analyse | DuckDB, SQL |
+| Regelbasierte Validierung | Great Expectations |
+| Visualisierung | Power BI, DAX |
+| Referenzmodell | ISO/IEC 25012 |
