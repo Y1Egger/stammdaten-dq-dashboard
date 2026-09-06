@@ -15,7 +15,7 @@ from pathlib import Path
 PFAD = Path(__file__).parent.parent / "data" / "raw" / "baumkataster.csv"
 
 # Wien liegt bei ca. 1-23 Bezirken; Pflanzjahre vor 1800 sind unplausibel
-JAHR_MIN, JAHR_MAX = 1800, 2026
+JAHR_MIN, JAHR_MAX = 1650, 2026
 
 
 def titel(text):
@@ -188,8 +188,6 @@ print(f"    {zeilen:,} Datensaetze, {spalten} Spalten geprueft".replace(",", "."
 print(f"    {pflanzjahr_null:,} verschleierte Nullwerte in PFLANZJAHR".replace(",", "."))
 print(f"    {stammumfang_null:,} verschleierte Nullwerte in STAMMUMFANG".replace(",", "."))
 print(f"    {int(leer.sum()):,} echte NULL-Werte insgesamt".replace(",", "."))
-print()
-print("    Naechster Schritt: Ableitung der Pruefregeln nach ISO/IEC 25012")
 print()
 
 print(df.loc[df["PFLANZJAHR"].between(1, 1799), "PFLANZJAHR"].value_counts())
