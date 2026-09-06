@@ -1,0 +1,16 @@
+﻿# Rohdaten
+data/
+*.duckdb
+
+# Python
+__pycache__/
+.venv/
+venv/
+*.pyc
+
+# Great Expectations
+gx/uncommitted/
+
+# Sonstiges
+.DS_Store
+~$*
