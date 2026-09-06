@@ -1,0 +1,16 @@
+run_ts,rule_id,regel,spalte,iso_dimension,geprueft_zeilen,fehler_zeilen,pass_rate,status
+2026-09-06T14:55:21,R01,Pflanzjahr im plausiblen Bereich,PFLANZJAHR,Vollstaendigkeit,229468,61288,0.7329,FAIL
+2026-09-06T14:55:21,R02,Stammumfang erfasst,STAMMUMFANG,Vollstaendigkeit,229468,612,0.9973,FAIL
+2026-09-06T14:55:21,R03,Bezirk vorhanden,BEZIRK,Vollstaendigkeit,229468,595,0.9974,FAIL
+2026-09-06T14:55:21,R04,Baumart vorhanden,GATTUNG_ART,Vollstaendigkeit,229468,0,1.0,PASS
+2026-09-06T14:55:21,R05,Bezirk zwischen 1 und 23,BEZIRK,Genauigkeit,229468,0,1.0,PASS
+2026-09-06T14:55:21,R06,Stammumfang plausibel (max 1000 cm),STAMMUMFANG,Genauigkeit,229468,23,0.9999,FAIL
+2026-09-06T14:55:21,R07,Baumhoehe in gueltiger Kategorie,BAUMHOEHE,Genauigkeit,229468,0,1.0,PASS
+2026-09-06T14:55:21,R08,Baum-ID eindeutig,BAUM_ID,Genauigkeit,229468,0,1.0,PASS
+2026-09-06T14:55:21,R09a,Laengengrad innerhalb Wien,SHAPE,Genauigkeit,229468,54,0.9998,FAIL
+2026-09-06T14:55:21,R09b,Breitengrad innerhalb Wien,SHAPE,Genauigkeit,229468,0,1.0,PASS
+2026-09-06T14:55:21,R10,Pflanzjahr stimmt mit Textfassung ueberein,PFLANZJAHR / PFLANZJAHR_TXT,Konsistenz,229468,0,1.0,PASS
+2026-09-06T14:55:21,R11,Stammumfang stimmt mit Textfassung ueberein,STAMMUMFANG / STAMMUMFANG_TXT,Konsistenz,229468,0,1.0,PASS
+2026-09-06T14:55:21,R12,Baumnummer rein numerisch,BAUMNUMMER,Konsistenz,229468,16703,0.9272,FAIL
+2026-09-06T14:55:21,R13,Format 'Botanischer Name (Trivialname)',GATTUNG_ART,Konsistenz,229468,42,0.9998,FAIL
+2026-09-06T14:55:21,R14,Pflanzjahr exakt erfasst (ab 2006),PFLANZJAHR,Glaubwuerdigkeit,229468,153263,0.3321,FAIL
