@@ -53,7 +53,7 @@ Die beiden Profiling-Schritte sind bewusst getrennt. `01_einlesen.py` prüft mit
 |---|---|---|
 | Strukturprüfung und Datentypen | pandas | abgeschlossen |
 | Inhaltliche Analyse | DuckDB | abgeschlossen |
-| Regelprüfung | Great Expectations | offen |
+| Regelprüfung | Great Expectations | abgeschlossen |
 | Dashboard | Power BI | offen |
 
 ---
@@ -246,30 +246,62 @@ Der Fall zeigt, dass Prüfregeln selbst eine Fehlerquelle sind: Ein nicht begrü
 
 ---
 
-## Geplante Prüfregeln
+## Teil 3: Regelprüfung mit Great Expectations
 
-Zuordnung zu den inhärenten Datenqualitätsmerkmalen nach ISO/IEC 25012.
+Quelle: [`src/03_validierung.py`](src/03_validierung.py)
 
-| # | Regel | Spalte | Dimension |
-|---|---|---|---|
-| R01 | Wert im Bereich 1650 bis 2026 | PFLANZJAHR | Vollständigkeit |
-| R02 | Wert größer 0 | STAMMUMFANG | Vollständigkeit |
-| R03 | Darf nicht leer sein | BEZIRK | Vollständigkeit |
-| R04 | Darf nicht leer sein | GATTUNG_ART | Vollständigkeit |
-| R05 | Wert im Bereich 1 bis 23 | BEZIRK | Genauigkeit |
-| R06 | Wert im Bereich 0 bis 1000 cm | STAMMUMFANG | Genauigkeit |
-| R07 | Kategorie aus definierter Liste | BAUMHOEHE | Genauigkeit |
-| R08 | Eindeutigkeit | BAUM_ID | Genauigkeit |
-| R09 | Koordinaten innerhalb Wien | SHAPE | Genauigkeit |
-| R10 | Übereinstimmung mit PFLANZJAHR_TXT | PFLANZJAHR | Konsistenz |
-| R11 | Übereinstimmung mit STAMMUMFANG_TXT | STAMMUMFANG | Konsistenz |
-| R12 | Einheitliches Format | BAUMNUMMER | Konsistenz |
-| R13 | Format Botanischer Name (Trivialname) | GATTUNG_ART | Konsistenz |
-| R14 | Pflanzjahr ab 2006, davor geschätzt | PFLANZJAHR | Glaubwürdigkeit |
+15 Prüfregeln, jeweils einem inhärenten Datenqualitätsmerkmal nach ISO/IEC 25012 zugeordnet. Ausgeführt auf 229.468 Datensätzen, nach Ausschluss der 3.140 Datensätze mit Status *Jungbaum wird gepflanzt*.
 
-Alle Regeln werden auf einer Teilmenge ohne Datensätze mit Status *Jungbaum wird gepflanzt* ausgeführt.
+<p align="center">
+  <img src="docs/img/09-regelpruefung.png" alt="Ergebnis der Regelprüfung je Regel und je ISO-Dimension">
+</p>
 
-R14 kennzeichnet keinen Fehler, sondern eine Konfidenzstufe: Laut Datenbeschreibung der Stadt Wien wurde das Baumalter vor 2006 aus dem Stammumfang geschätzt und ist erst danach exakt erfasst.
+### Regelkatalog und Ergebnis
+
+| # | Regel | Spalte | Dimension | Fehler | Pass-Rate |
+|---|---|---|---|---|---|
+| R01 | Pflanzjahr im plausiblen Bereich (1650 bis 2026) | PFLANZJAHR | Vollständigkeit | 61.288 | 73,29 % |
+| R02 | Stammumfang erfasst | STAMMUMFANG | Vollständigkeit | 612 | 99,73 % |
+| R03 | Bezirk vorhanden | BEZIRK | Vollständigkeit | 595 | 99,74 % |
+| R04 | Baumart vorhanden | GATTUNG_ART | Vollständigkeit | 0 | 100 % |
+| R05 | Bezirk zwischen 1 und 23 | BEZIRK | Genauigkeit | 0 | 100 % |
+| R06 | Stammumfang plausibel (max 1000 cm) | STAMMUMFANG | Genauigkeit | 23 | 99,99 % |
+| R07 | Baumhöhe in gültiger Kategorie | BAUMHOEHE | Genauigkeit | 0 | 100 % |
+| R08 | Baum-ID eindeutig | BAUM_ID | Genauigkeit | 0 | 100 % |
+| R09a | Längengrad innerhalb Wien | SHAPE | Genauigkeit | 54 | 99,98 % |
+| R09b | Breitengrad innerhalb Wien | SHAPE | Genauigkeit | 0 | 100 % |
+| R10 | Pflanzjahr stimmt mit Textfassung überein | PFLANZJAHR | Konsistenz | 0 | 100 % |
+| R11 | Stammumfang stimmt mit Textfassung überein | STAMMUMFANG | Konsistenz | 0 | 100 % |
+| R12 | Baumnummer rein numerisch | BAUMNUMMER | Konsistenz | 16.703 | 92,72 % |
+| R13 | Format Botanischer Name (Trivialname) | GATTUNG_ART | Konsistenz | 42 | 99,98 % |
+| R14 | Pflanzjahr exakt erfasst (ab 2006) | PFLANZJAHR | Glaubwürdigkeit | 153.263 | 33,21 % |
+
+### Bestätigung des Profilings
+
+R01 meldet 61.288 Verstöße bei 229.468 geprüften Datensätzen. Das entspricht exakt den 64.410 Sentinel Values aus Befund 1 abzüglich der 3.140 ausgeschlossenen Jungbäume. Profiling und Regelprüfung stimmen damit überein, was beide Schritte gegenseitig bestätigt.
+
+### 11. Vertauschte Koordinaten oder zu enge Bounding Box
+
+R09a meldet 54 Verstöße, R09b keinen einzigen. Da nur der Längengrad betroffen ist und nicht der Breitengrad, handelt es sich nicht um zufälliges Rauschen. Entweder ist die verwendete Bounding Box am östlichen oder westlichen Rand zu eng geschnitten, oder in einzelnen Datensätzen sind Längen- und Breitengrad vertauscht.
+
+### 12. Unplausible Stammumfänge
+
+R06 meldet 23 Datensätze mit einem Stammumfang über 1000 cm. Ein Baum mit über zehn Metern Stammumfang ist weltweit eine Ausnahmeerscheinung. Wahrscheinlich liegt entweder ein Tippfehler oder eine Erfassung in Millimeter statt Zentimeter vor.
+
+### Zur Bewertung von R14
+
+R14 weist mit 33,21 % die niedrigste Pass-Rate aller Regeln aus, misst aber keine Fehler. Laut Datenbeschreibung der Stadt Wien wurde das Baumalter vor 2006 aus dem Stammumfang geschätzt und ist erst danach exakt erfasst. Die 153.263 Verstöße sind also korrekt erfasste Werte mit geringerer Konfidenz, nicht fehlerhafte Daten.
+
+Die Regel wird deshalb als eigene Kategorie geführt und im Dashboard farblich von echten Verstößen unterschieden. Andernfalls würde eine korrekte Eigenschaft des Datenbestands die Gesamtbewertung verzerren.
+
+### Ergebnisdateien
+
+| Datei | Inhalt |
+|---|---|
+| `output/dq_results.csv` | eine Zeile je Regel mit Pass-Rate, Fehleranzahl und ISO-Dimension |
+| `output/dq_fehler.csv` | eine Zeile je fehlerhaftem Datensatz, verknüpft über `rule_id` |
+
+Die Trennung in zwei Dateien ermöglicht im Dashboard den Drill-through von einer Regel auf die betroffenen Datensätze.
 
 ---
 
@@ -282,6 +314,7 @@ pip install -r requirements.txt
 
 python src/01_einlesen.py
 python src/02_profiling.py
+python src/03_validierung.py
 ```
 
 Die Rohdatei wird unter `data/raw/baumkataster.csv` erwartet.
