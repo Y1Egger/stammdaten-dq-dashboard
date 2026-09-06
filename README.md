@@ -43,7 +43,7 @@ CSV (data.gv.at)
   Dashboard          stammdaten.pbix        Power BI
 ```
 
-Die beiden Profiling-Schritte sind bewusst getrennt. `01_einlesen.py` prüft mit pandas, ob die Datei überhaupt korrekt gelesen wird, und wertet Datentypen aus. `02_profiling.py` formuliert die inhaltlichen Analysen mengenbasiert in SQL. Die Ergebnisse beider Schritte müssen übereinstimmen, was als gegenseitige Kontrolle dient.
+Die beiden Profiling-Schritte sind bewusst getrennt. `01_einlesen.py` prüft mit pandas, ob die Datei korrekt gelesen wird, und wertet die Datentypen aus. `02_profiling.py` bildet dieselben Analysen mengenbasiert in SQL nach. Weichen die Ergebnisse voneinander ab, liegt ein Fehler in einem der beiden Skripte vor. Die Doppelung ist damit eine gegenseitige Kontrolle.
 
 ---
 
@@ -86,7 +86,15 @@ con.execute(f"""
 """)
 ```
 
-Alle folgenden Befunde stammen aus SQL-Abfragen auf dieser Tabelle.
+<p align="center">
+  <img src="docs/img/08-duckdb-profiling.png" alt="Ausgabe der SQL-Analysen in DuckDB">
+</p>
+
+---
+
+## Befunde
+
+Die Befunde sind nach ihrer Tragweite gruppiert. Screenshots aus Teil 1 zeigen die pandas-Ausgabe, die SQL-Blöcke zeigen die entsprechende Abfrage aus Teil 2.
 
 ---
 
@@ -146,24 +154,23 @@ GROUP BY GATTUNG_ART
 ORDER BY anzahl DESC;
 ```
 
-| Wert | Anzahl | Charakter |
-|---|---|---|
-| Jungbaum wird gepflanzt | 3.140 | Statusinformation, keine Artangabe |
-| nicht bekannt | 27 | Platzhalter |
-| unbekannt | 4 | Platzhalter, abweichende Schreibweise |
-| Laubbaum | 4 | unspezifische Angabe |
-| Baumgruppe | 3 | unspezifische Angabe |
-| Obstbaum | 2 | unspezifische Angabe |
+<p align="center">
+  <img src="docs/img/07-gattung-art.png" alt="Abweichungen vom erwarteten Format in GATTUNG_ART">
+</p>
 
-Die Spalte trägt damit drei verschiedene Informationsarten. Der Wert *Jungbaum wird gepflanzt* ist ein Lebenszyklusstatus und gehört fachlich in eine eigene Spalte.
+Die abweichenden Werte zerfallen in drei Gruppen mit völlig unterschiedlicher Bedeutung:
+
+| Gruppe | Anzahl | Charakter |
+|---|---|---|
+| Status | 3.140 | Lebenszyklusstatus, keine Artangabe |
+| Platzhalter | 31 | zwei Schreibweisen für denselben Sachverhalt |
+| Unspezifisch | 9 | gültig, aber auf anderer Detailebene |
+
+Der Wert *Jungbaum wird gepflanzt* ist damit keine fehlende Artangabe, sondern eine Statusinformation, die fachlich in eine eigene Spalte gehört.
 
 Umgekehrt enthalten die regulären Werte bis zu vier Attribute in einem Feld, etwa `Acer platanoides 'Norwegian Sunset' (Spitz-Ahorn)` mit Gattung, Art, Sorte und Trivialname. Beides verstößt gegen die erste Normalform.
 
 *Konsequenz für die Regeln:* Datensätze mit Status *Jungbaum wird gepflanzt* werden vor der Prüfung ausgeschlossen, da fehlende Messwerte dort fachlich korrekt sind. Eine Regel ohne diese Ausnahme erzeugt 3.140 Falschmeldungen.
-
-<p align="center">
-  <img src="docs/img/07-gattung-art.png" alt="Abweichungen vom erwarteten Format in GATTUNG_ART">
-</p>
 
 ---
 
